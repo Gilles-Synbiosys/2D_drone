@@ -75,9 +75,10 @@ class Drone:
             y: state vector
         """
 
-        self.cmd[1] = -y[2] 
-        self.cmd[0] = self.mass*self.g/np.cos(y[2]+self.cmd[1])
+        self.cmd[1] = -y[2] + np.arctan2(self.wpt[1]-y[1], self.wpt[0]-y[0])*self.gainDict['Kp_d'] #+ y[5]*self.gainDict['Kd_f'] + self.gainDict['Ki_f']*np.trapz(self.wpt[1]-y[1], self.wpt[0]-y[0])
+        self.cmd[0] = self.mass*self.g/np.cos(y[2]+self.cmd[1]) + ((self.wpt[0]-y[0])**2 + (self.wpt[1]-y[1])**2)**.5*self.gainDict['Kp_f'] #+ (self.wpt[0]-y[0])*self.gainDict['Kd_d'] + self.gainDict['Ki_d']*np.trapz(self.wpt[0]-y[0])
         
+
     def eqGenerator(self):
         """
         Generates the equations of motion for the drone
