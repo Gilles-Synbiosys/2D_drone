@@ -23,7 +23,7 @@ class Drone:
         self.cmd = np.zeros(2) # [F, theta]
         self.eq = None # equations of motion
         self.wpt = np.zeros(2) # waypoint
-        self.gainDict = {'Kp_f': 0.1,
+        self.gainDict = {'Kp_f': 0.001,
                          'Kd_f': 1, 
                          'Ki_f': 1, 
                          'Kp_d': 0.0001, 
@@ -75,8 +75,8 @@ class Drone:
             y: state vector
         """
 
-        self.cmd[1] = -y[2] + np.arctan2(self.wpt[1]-y[1], self.wpt[0]-y[0])*self.gainDict['Kp_d'] #+ y[5]*self.gainDict['Kd_f'] + self.gainDict['Ki_f']*np.trapz(self.wpt[1]-y[1], self.wpt[0]-y[0])
-        self.cmd[0] = self.mass*self.g/np.cos(y[2]+self.cmd[1]) + ((self.wpt[0]-y[0])**2 + (self.wpt[1]-y[1])**2)**.5*self.gainDict['Kp_f'] #+ (self.wpt[0]-y[0])*self.gainDict['Kd_d'] + self.gainDict['Ki_d']*np.trapz(self.wpt[0]-y[0])
+        self.cmd[1] = -y[2] 
+        self.cmd[0] = self.mass*self.g/np.cos(y[2]+self.cmd[1])
         
     def eqGenerator(self):
         """
