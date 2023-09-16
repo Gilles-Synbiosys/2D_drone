@@ -20,14 +20,14 @@ class Drone:
         self.com = com
         self.stVec = np.zeros((1, 6))
         self.t = np.zeros(1)
-        self.cmd = np.zeros(2) # [F, theta]
+        self.cmd = np.zeros((1,2)) # [F, theta]
         self.eq = None # equations of motion
         self.wpt = np.zeros(2) # waypoint
         self.gainDict = {'Kp_f': 0.001,
-                         'Kd_f': 1, 
+                         'Kd_f': 0.001, 
                          'Ki_f': 1, 
-                         'Kp_d': 0.0001, 
-                         'Kd_d': 1, 
+                         'Kp_d': 0.001, 
+                         'Kd_d': 0.001, 
                          'Ki_d': 1}
 
     def __str__(self):
@@ -67,6 +67,7 @@ class Drone:
         """
         self.wpt = np.array([x, y])
 
+
     def control(self, t, y):
         """
         Sets the control inputs for the drone
@@ -74,9 +75,11 @@ class Drone:
             t: time in s
             y: state vector
         """
-
-        self.cmd[1] = -y[2] + np.arctan2(self.wpt[1]-y[1], self.wpt[0]-y[0])*self.gainDict['Kp_d'] #+ y[5]*self.gainDict['Kd_f'] + self.gainDict['Ki_f']*np.trapz(self.wpt[1]-y[1], self.wpt[0]-y[0])
-        self.cmd[0] = self.mass*self.g/np.cos(y[2]+self.cmd[1]) + ((self.wpt[0]-y[0])**2 + (self.wpt[1]-y[1])**2)**.5*self.gainDict['Kp_f'] #+ (self.wpt[0]-y[0])*self.gainDict['Kd_d'] + self.gainDict['Ki_d']*np.trapz(self.wpt[0]-y[0])
+        dist = ((self.wpt[0]-y[0])**2 + (self.wpt[1]-y[1])**2)**.5
+        vel = (y[3]**2 + y[4]**2)**.5
+        angle = - self.gainDict['Kp_d']*y[2] - self.gainDict['Kd_d']*y[5] # - np.arctan2(self.wpt[1]-y[1], self.wpt[0]-y[0])*self.gainDict['Kp_d'] #+ y[5]*self.gainDict['Kd_f'] + self.gainDict['Ki_f']*np.trapz(self.wpt[1]-y[1], self.wpt[0]-y[0])
+        force = self.mass*self.g/np.cos(y[2]+angle)# + dist*self.gainDict['Kp_f'] - vel*self.gainDict['Kd_f'] #+ self.gainDict['Ki_d']*np.trapz(self.wpt[0]-y[0])
+        return force, angle
         
 
     def eqGenerator(self):
@@ -100,14 +103,16 @@ class Drone:
 
             # y = [x, y, theta, xdot, ydot, thetadot]
             # ydot = [xdot, ydot, thetadot, xddot, yddot, thetaddot]
-            self.control(t, y)
+            force, angle = self.control(t, y)
+            #self.pid(t, y)
             ydot = np.zeros(6)
             ydot[0] = y[3]
             ydot[1] = y[4]
             ydot[2] = y[5]
-            ydot[3] = self.cmd[0]*np.sin(y[2]+self.cmd[1])/self.mass
-            ydot[4] = self.cmd[0]*np.cos(y[2]+self.cmd[1])/self.mass - self.g
-            ydot[5] = self.cmd[0]*np.sin(self.cmd[1])*self.com/self.inertia
+            ydot[3] = force*np.sin(y[2]+angle)/self.mass
+            ydot[4] = force*np.cos(y[2]+angle)/self.mass - self.g
+            ydot[5] = force*np.sin(angle)*self.com/self.inertia
+            self.cmdTmp = np.array([force, angle])
             return ydot
         self.eq = eq
     
@@ -119,6 +124,7 @@ class Drone:
             y: state vector
         """
         self.stVec = np.vstack((self.stVec, y))
+        self.cmd = np.vstack((self.cmd, self.cmdTmp))
         self.t = np.append(self.t, t)
     
     def plot(self):
@@ -127,19 +133,62 @@ class Drone:
         args:
             None
         """
-        fig, axs = plt.subplots(3, 2)
+        fig, axs = plt.subplots(4, 2)
+        # Make the figure large
+        fig.set_size_inches(18.5, 10.5)
+
+        # Separate the plots
+        fig.tight_layout(pad=3.0)
+
         axs[0, 0].plot(self.t, self.stVec[:, 0])
         axs[0, 0].set_title('x')
+        axs[0, 0].set_ylabel('Position (m)')
+        axs[0, 0].set_xlabel('Time (s)')
+
         axs[0, 1].plot(self.t, self.stVec[:, 1])
-        axs[0, 1].set_title('y')
-        axs[1, 0].plot(self.t, self.stVec[:, 2])
-        axs[1, 0].set_title('theta')
+        axs[0, 1].set_title('y (m)')
+        axs[0, 1].set_xlabel('Time (s)')
+        axs[0, 1].set_ylabel('Position (m)')
+
+        axs[1, 0].plot(self.t, self.stVec[:, 2]*180/np.pi)
+        axs[1, 0].set_title('theta (deg)')
+        axs[1, 0].set_xlabel('Time (s)')
+        axs[1, 0].set_ylabel('Angle (deg)')
+
         axs[1, 1].plot(self.t, self.stVec[:, 3])
-        axs[1, 1].set_title('xdot')
+        axs[1, 1].set_title('xdot (m/s)')
+        axs[1, 1].set_xlabel('Time (s)')
+        axs[1, 1].set_ylabel('Velocity (m/s)')
+
         axs[2, 0].plot(self.t, self.stVec[:, 4])
-        axs[2, 0].set_title('ydot')
-        axs[2, 1].plot(self.t, self.stVec[:, 5])
-        axs[2, 1].set_title('thetadot')
+        axs[2, 0].set_title('ydot (m/s)')
+        axs[2, 0].set_xlabel('Time (s)')
+        axs[2, 0].set_ylabel('Velocity (m/s)')
+
+        axs[2, 1].plot(self.t, self.stVec[:, 5]*180/np.pi)
+        axs[2, 1].set_title('thetadot (deg/s)')
+        axs[2, 1].set_xlabel('Time (s)')
+        axs[2, 1].set_ylabel('Angular Velocity (deg/s)')
+
+        axs[3, 0].plot(self.t, self.cmd[:, 0])
+        axs[3, 0].set_title('F (N)')
+        axs[3, 0].set_xlabel('Time (s)')
+        axs[3, 0].set_ylabel('Force (N)')
+
+        axs[3, 1].plot(self.t, self.cmd[:, 1]*180/np.pi)
+        axs[3, 1].set_title('theta (deg)')  
+        axs[3, 1].set_xlabel('Time (s)')
+        axs[3, 1].set_ylabel('Angle (deg)')
+
+        plt.show()
+
+    def plot2D(self):
+        """
+        Plots the drone in 2D
+        args:
+            None
+        """
+        plt.plot(self.stVec[:, 0], self.stVec[:, 1])
         plt.show()
 
     def animate(self):
@@ -148,20 +197,29 @@ class Drone:
         args:
             None
         """
+        
         fig = plt.figure()
         ax = plt.axes(xlim=(-2, 2), ylim=(-2, 2))
+        x_top = self.com*np.sin(self.stVec[:, 2])
+        y_top = self.com*np.cos(self.stVec[:, 2])
+        x_bot = -self.com*np.sin(self.stVec[:, 2])
+        y_bot = -self.com*np.cos(self.stVec[:, 2])
+        x_force = self.cmd[-1,0]*np.sin(self.stVec[:, 2]+self.cmd[-1,1])*0.05
+        y_force = self.cmd[-1,0]*np.cos(self.stVec[:, 2]+self.cmd[-1,1])*0.05
         line, = ax.plot([], [], lw=2)
+        force, = ax.plot([], [], lw=2)
+
         def init():
             line.set_data([], [])
-            return line,
+            force.set_data([], [])
+            return line, force
         def animate(i):
-            x = self.stVec[i, 0]
-            y = self.stVec[i, 1]
-            line.set_data(x, y)
-            return line,
-        anim = animation.FuncAnimation(fig, animate, init_func=init,
-                               frames=len(self.t), interval=20, blit=True)
+            line.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_bot[i]], [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_bot[i]])
+            force.set_data([self.stVec[i, 0]+x_top, self.stVec[i, 0]+x_top+x_force[i]], [self.stVec[i, 1]+y_top, self.stVec[i, 1]+y_top+y_force[i]])
+            return line, force
+        anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(self.t), interval=20, blit=True)
         plt.show()
+
 
     def solve(self, t0, tf, dt):
         """
@@ -182,10 +240,11 @@ if __name__ == "__main__":
     drone = Drone(0.5, 0.1, 0.1)
     drone.setPhysics(9.81)
     drone.eqGenerator()
-    drone.setConditions(0, 0, np.pi*20.0/180.0, -1.0, 2.0, 0)
+    drone.setConditions(0, 0, np.pi*20.0/180.0, 0.01, 0.0, 0)
     print(drone.eq(0, np.zeros(6)))
     drone.setWaypoint(1, 1)
     drone.solve(0, 100, 0.01)
+    drone.animate()
     
 
     
