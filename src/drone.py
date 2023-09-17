@@ -338,7 +338,7 @@ class Drone:
         """
 
         fig = plt.figure()
-        ax = plt.axes(xlim=(-5.0, 5.0), ylim=(-5.0, 5.0))
+        ax = plt.axes(xlim=(-2.0, 2.0), ylim=(-2.0, 2.0))
         ax.set_aspect('equal')
         x_top = self.com*np.sin(self.stVec[:, 2])
         y_top = self.com*np.cos(self.stVec[:, 2])
@@ -364,7 +364,7 @@ class Drone:
                           [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_bot[i]])
             force.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_top[i]+x_force[i]], 
                            [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_top[i]+y_force[i]])
-            force.set_color([0, 0, 1, 1-norm[i]/self.maxForce])
+            force.set_color([0, 0, 1-norm[i]/self.maxForce])
             
             return line, force
         anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(self.t), interval=20, blit=True)
