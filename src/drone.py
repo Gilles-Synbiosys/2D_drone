@@ -29,8 +29,10 @@ class Drone:
         self.pos = np.zeros(3) # position
         self.vel = np.zeros(3) # velocity
         self.controlMode = 'static' # static or dynamic
+        self.actuator = 'angle' # angle or torque
         self.maxForce = 5.0 # N
         self.minForce = 0.1 # N
+        self.maxTorque = 0.1 # N*m
         self.maxAngle = np.pi*45/180 # rad
 
         # Gains for PID controller static position
@@ -69,6 +71,17 @@ class Drone:
         """
         self.g = g
 
+    def setActuator(self, actuator):
+        """
+        Sets the actuator of the drone
+        args:
+            actuator: actuator type
+        """
+        if actuator == 'angle' or actuator == 'torque':
+            self.actuator = actuator
+        else:
+            print('Invalid actuator, actuator set to {}'.format(self.actuator))
+
     def setConditions(self, x0, y0, theta0, xdot0, ydot0, thetadot0):
         """
         Sets the initial conditions of the drone
@@ -92,9 +105,20 @@ class Drone:
         """
         self.wpt = np.array([x, y])
 
-    def setLimitControl(self, maxForce, minForce, maxAngle):
+    def setLimitControl(self, maxForce, minForce, maxAngle = 20*np.pi/180,maxTorque = 0.1):
+        """
+        Sets the limits for the control inputs
+        args:
+            maxForce: maximum force in N
+            minForce: minimum force in N
+            maxAngle: maximum angle in rad
+            maxTorque: maximum torque in N*m
+        """
+
+        
         self.maxForce = maxForce
         self.minForce = minForce
+        self.maxTorque = maxTorque
         self.maxAngle = maxAngle
 
     def setPos(self, x, y, theta):
@@ -159,71 +183,122 @@ class Drone:
             t: time in s
             y: state vector
         """
-        if self.controlMode == 'static':
-            fy = self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
-            fx = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
-            self.cmdTmp[1] = np.arctan(fx/fy) + self.kptheta*(self.pos[2] - y[2]) - y[2]
-            self.cmdTmp[0] = (fx**2+fy**2)**.5
-            
-            #self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(0.0 - y[5]) + self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
-            # Limit the angle
-            self.cmdTmp[1] = np.max([self.cmdTmp[1], -self.maxAngle])
-            self.cmdTmp[1] = np.min([self.cmdTmp[1], self.maxAngle])
+        if self.actuator == 'angle':
+            if self.controlMode == 'static':
+                fy = self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
+                fx = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
+                self.cmdTmp[1] = np.arctan(fx/fy) + self.kptheta*(self.pos[2] - y[2]) - y[2]
+                self.cmdTmp[0] = (fx**2+fy**2)**.5
+                
+                #self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(0.0 - y[5]) + self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
+                # Limit the angle
+                self.cmdTmp[1] = np.max([self.cmdTmp[1], -self.maxAngle])
+                self.cmdTmp[1] = np.min([self.cmdTmp[1], self.maxAngle])
 
-            #self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
-            # Limit the force
-            self.cmdTmp[0] = np.max([self.cmdTmp[0], self.minForce])
-            self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
+                #self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
+                # Limit the force
+                self.cmdTmp[0] = np.max([self.cmdTmp[0], self.minForce])
+                self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
 
-        elif self.controlMode == 'dynamic':
-            # velocity derivative estimation
-            ydot = np.zeros(6)
-            ydot[3] = self.cmdTmp[0]*np.sin(y[2]+self.cmdTmp[1])/self.mass
-            ydot[4] = self.cmdTmp[0]*np.cos(y[2]+self.cmdTmp[1])/self.mass - self.g
-            ydot[5] = self.cmdTmp[0]*np.sin(self.cmdTmp[1])*self.com/self.inertia
+            elif self.controlMode == 'dynamic':
+                # velocity derivative estimation
+                ydot = np.zeros(6)
+                ydot[3] = self.cmdTmp[0]*np.sin(y[2]+self.cmdTmp[1])/self.mass
+                ydot[4] = self.cmdTmp[0]*np.cos(y[2]+self.cmdTmp[1])/self.mass - self.g
+                ydot[5] = self.cmdTmp[0]*np.sin(self.cmdTmp[1])*self.com/self.inertia
 
-            self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kpthetadot*(self.vel[2] - y[5]) + self.kdthetadot*(- ydot[5]) + self.kpxdot*(self.vel[0]-y[0]) +  self.kdxdot*(- ydot[3])
-            # Limit the angle
-            self.cmdTmp[1] = np.max([self.cmdTmp[1], -self.maxAngle])
-            self.cmdTmp[1] = np.min([self.cmdTmp[1], self.maxAngle])
+                self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kpthetadot*(self.vel[2] - y[5]) + self.kdthetadot*(- ydot[5]) + self.kpxdot*(self.vel[0]-y[0]) +  self.kdxdot*(- ydot[3])
+                # Limit the angle
+                self.cmdTmp[1] = np.max([self.cmdTmp[1], -self.maxAngle])
+                self.cmdTmp[1] = np.min([self.cmdTmp[1], self.maxAngle])
 
-            self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpydot*(self.vel[1] - y[4]) + self.kdydot*(-ydot[4])
-            # Limit the force
-            self.cmdTmp[0] = np.max([self.cmdTmp[0], 0])
-            self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
+                self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpydot*(self.vel[1] - y[4]) + self.kdydot*(-ydot[4])
+                # Limit the force
+                self.cmdTmp[0] = np.max([self.cmdTmp[0], 0])
+                self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
+        elif self.actuator == 'torque':
+            if self.controlMode == 'static':
+                # fy = self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
+                # fx = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
+                # self.cmdTmp[1] = np.arctan(fx/fy) + self.kptheta*(self.pos[2] - y[2]) - y[2]
+                self.cmdTmp[1] = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3]) + self.kptheta*(self.pos[2] - y[2]) - y[2]
+                self.cmdTmp[0] = (self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4]))/np.cos(y[2])
+                
+                #self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(0.0 - y[5]) + self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
+                # Limit the angle
+                self.cmdTmp[1] = np.max([self.cmdTmp[1], -self.maxTorque])
+                self.cmdTmp[1] = np.min([self.cmdTmp[1], self.maxTorque])
+
+                #self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
+                # Limit the force
+                self.cmdTmp[0] = np.max([self.cmdTmp[0], self.minForce])
+                self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
+
+            elif self.controlMode == 'dynamic':
+                # velocity derivative estimation
+                # not functional yet
+                self.cmdTmp[1] = 0.0
+                self.cmdTmp[0] = 0.0
+
 
     def eqGenerator(self):
         """
         Generates the equations of motion for the drone
         
         Args:
-            None
+            mode: mode of the control system, 'angle' is force magnitude and force orientation, 'torque is force magnitude and torque
         Returns:
             None
         """
-        def eq(t, y):
-            """
-            Returns the equations of motion for the drone
-            args:
-                t: time in s
-                y: state vector
-            returns:
-                ydot: derivative of the state vector
-            """
+        if self.actuator == 'angle':
+            def eq(t, y):
+                """
+                Returns the equations of motion for the drone
+                args:
+                    t: time in s
+                    y: state vector
+                returns:
+                    ydot: derivative of the state vector
+                """
 
-            # y = [x, y, theta, xdot, ydot, thetadot]
-            # ydot = [xdot, ydot, thetadot, xddot, yddot, thetaddot]
-            #self.pid(t, y)
-            self.control(t, y)
-            ydot = np.zeros(6)
-            ydot[0] = y[3]
-            ydot[1] = y[4]
-            ydot[2] = y[5]
-            ydot[3] = self.cmdTmp[0]*np.sin(y[2]+self.cmdTmp[1])/self.mass
-            ydot[4] = self.cmdTmp[0]*np.cos(y[2]+self.cmdTmp[1])/self.mass - self.g
-            ydot[5] = self.cmdTmp[0]*np.sin(self.cmdTmp[1])*self.com/self.inertia
-            return ydot
-        self.eq = eq
+                # y = [x, y, theta, xdot, ydot, thetadot]
+                # ydot = [xdot, ydot, thetadot, xddot, yddot, thetaddot]
+                #self.pid(t, y)
+                self.control(t, y)
+                ydot = np.zeros(6)
+                ydot[0] = y[3]
+                ydot[1] = y[4]
+                ydot[2] = y[5]
+                ydot[3] = self.cmdTmp[0]*np.sin(y[2]+self.cmdTmp[1])/self.mass
+                ydot[4] = self.cmdTmp[0]*np.cos(y[2]+self.cmdTmp[1])/self.mass - self.g
+                ydot[5] = self.cmdTmp[0]*np.sin(self.cmdTmp[1])*self.com/self.inertia
+                return ydot
+            self.eq = eq
+
+        elif self.actuator == 'torque':
+            def eq(t, y):
+                """
+                Returns the equations of motion for the drone
+                args:
+                    t: time in s
+                    y: state vector
+                returns:
+                    ydot: derivative of the state vector
+                """
+
+                # y = [x, y, theta, xdot, ydot, thetadot]
+                # ydot = [xdot, ydot, thetadot, xddot, yddot, thetaddot]
+                #self.pid(t, y)
+                self.control(t, y)
+                ydot = np.zeros(6)
+                ydot[0] = y[3]
+                ydot[1] = y[4]
+                ydot[2] = y[5]
+                ydot[3] = self.cmdTmp[0]*np.sin(y[2])/self.mass
+                ydot[4] = self.cmdTmp[0]*np.cos(y[2])/self.mass - self.g
+                ydot[5] = self.cmdTmp[1]/self.inertia
+                return ydot
+            self.eq = eq
     
     def updateState(self, t, y):
         """
@@ -284,10 +359,16 @@ class Drone:
         axs[3, 0].set_xlabel('Time (s)')
         axs[3, 0].set_ylabel('Force (N)')
 
-        axs[3, 1].plot(self.t, self.cmd[:, 1]*180/np.pi,'k')
-        axs[3, 1].set_title('delta (deg)')  
-        axs[3, 1].set_xlabel('Time (s)')
-        axs[3, 1].set_ylabel('Angle (deg)')
+        if self.actuator == 'angle':
+            axs[3, 1].plot(self.t, self.cmd[:, 1]*180/np.pi,'k')
+            axs[3, 1].set_title('delta (deg)')  
+            axs[3, 1].set_xlabel('Time (s)')
+            axs[3, 1].set_ylabel('Angle (deg)')
+        elif self.actuator == 'torque':
+            axs[3, 1].plot(self.t, self.cmd[:, 1],'k')
+            axs[3, 1].set_title('M (Nm)')  
+            axs[3, 1].set_xlabel('Time (s)')
+            axs[3, 1].set_ylabel('Torque (Nm)')
 
         plt.show()
 
@@ -354,8 +435,12 @@ class Drone:
         y_top = self.com*np.cos(self.stVec[:, 2])
         x_bot = -self.com*np.sin(self.stVec[:, 2])
         y_bot = -self.com*np.cos(self.stVec[:, 2])
-        x_force = self.cmd[:,0]*np.sin(self.stVec[:, 2]+self.cmd[:,1])
-        y_force = self.cmd[:,0]*np.cos(self.stVec[:, 2]+self.cmd[:,1])
+        if self.actuator == 'angle':
+            x_force = self.cmd[:,0]*np.sin(self.stVec[:, 2]+self.cmd[:,1])
+            y_force = self.cmd[:,0]*np.cos(self.stVec[:, 2]+self.cmd[:,1])
+        elif self.actuator == 'torque':
+            x_force = self.cmd[:,0]*np.sin(self.stVec[:, 2])
+            y_force = self.cmd[:,0]*np.cos(self.stVec[:, 2])
 
         # Normalize the force
         norm = (x_force**2+y_force**2)**0.5
@@ -372,14 +457,14 @@ class Drone:
             return line, force
         def animate(i):
             
-            ax.set_xlim(self.stVec[i, 0] - .5, self.stVec[i, 0] + .5)
-            ax.set_ylim(self.stVec[i, 1] - .5, self.stVec[i, 1] + .5)
             line.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_bot[i]], 
                           [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_bot[i]])
             force.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_top[i]+x_force[i]], 
                            [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_top[i]+y_force[i]])
             comPt.set_data([self.stVec[i, 0]], 
                            [self.stVec[i, 1]])
+            ax.set_xlim(self.stVec[i, 0] - .5, self.stVec[i, 0] + .5)
+            ax.set_ylim(self.stVec[i, 1] - .5, self.stVec[i, 1] + .5)
             #force.set_color([0, 0, 1-norm[i]/self.maxForce])
             
             
@@ -407,20 +492,25 @@ def main():
     drone = Drone(0.5, 0.1, 0.1)
     drone.setPhysics(9.81)
     drone.eqGenerator()
-    drone.setConditions(0., 0., 0*np.pi/180., 2.0, 0.0, 0.0)
+    drone.setConditions(0., 0., 1*np.pi/180., 0.0, 0.0, 0.0)
     drone.setControlMode('static')
-    drone.setLimitControl(100.0,0.0,45.0*np.pi/180)
+    drone.setActuator('torque')
+    drone.setLimitControl(10.0,
+                          0.0,
+                          maxAngle=20*np.pi/180,
+                          maxTorque=0.1)
     #drone.setPos(1.0, 1.0, 0.0)
     #drone.setVel(0.0, 0.0, 0.0)
 
-    gainDict = {'Kp_x': 5.0, 
-                'Kd_x': 5.0, 
+
+    gainDict = {'Kp_x': 1.0, 
+                'Kd_x': 0.1, 
                 'Ki_x': 0.0, 
                 'Kp_y': 1.0, 
                 'Kd_y': 10.0, 
                 'Ki_y': 0.0, 
-                'Kp_theta': .50, 
-                'Kd_theta': 5.0, 
+                'Kp_theta': .1, 
+                'Kd_theta': 1.0, 
                 'Ki_theta': 0.0,
                 'Kp_xdot': 0.0,
                 'Kd_xdot': 0.0,
