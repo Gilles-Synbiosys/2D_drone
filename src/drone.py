@@ -413,8 +413,8 @@ def main():
     #drone.setPos(1.0, 1.0, 0.0)
     #drone.setVel(0.0, 0.0, 0.0)
 
-    gainDict = {'Kp_x': 10.0, 
-                'Kd_x': 1.0, 
+    gainDict = {'Kp_x': 5.0, 
+                'Kd_x': 5.0, 
                 'Ki_x': 0.0, 
                 'Kp_y': 1.0, 
                 'Kd_y': 10.0, 
