@@ -218,10 +218,8 @@ class Drone:
                 self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
         elif self.actuator == 'torque':
             if self.controlMode == 'static':
-                # fy = self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
-                # fx = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
-                # self.cmdTmp[1] = np.arctan(fx/fy) + self.kptheta*(self.pos[2] - y[2]) - y[2]
-                self.cmdTmp[1] = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3]) + self.kptheta*(self.pos[2] - y[2]) - y[2]
+
+                self.cmdTmp[1] = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(0.0 - y[3]) + self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(0.0 - y[5])
                 self.cmdTmp[0] = (self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4]))/np.cos(y[2])
                 
                 #self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(0.0 - y[5]) + self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
@@ -492,25 +490,25 @@ def main():
     drone = Drone(0.5, 0.1, 0.1)
     drone.setPhysics(9.81)
     drone.eqGenerator()
-    drone.setConditions(0., 0., 1*np.pi/180., 0.0, 0.0, 0.0)
+    drone.setConditions(0., 0., 0*np.pi/180., 0.0, 0.0, 0.0)
     drone.setControlMode('static')
     drone.setActuator('torque')
-    drone.setLimitControl(10.0,
+    drone.setLimitControl(1000.0,
                           0.0,
                           maxAngle=20*np.pi/180,
-                          maxTorque=0.1)
-    #drone.setPos(1.0, 1.0, 0.0)
+                          maxTorque=100.0)
+    drone.setPos(1.0, 1.0, 0.0)
     #drone.setVel(0.0, 0.0, 0.0)
 
 
-    gainDict = {'Kp_x': 1.0, 
-                'Kd_x': 0.1, 
+    gainDict = {'Kp_x': 5.0, 
+                'Kd_x': 100., 
                 'Ki_x': 0.0, 
-                'Kp_y': 1.0, 
-                'Kd_y': 10.0, 
+                'Kp_y': 100.0, 
+                'Kd_y': 1000.0, 
                 'Ki_y': 0.0, 
-                'Kp_theta': .1, 
-                'Kd_theta': 1.0, 
+                'Kp_theta': 50.0, 
+                'Kd_theta': 10.0, 
                 'Ki_theta': 0.0,
                 'Kp_xdot': 0.0,
                 'Kd_xdot': 0.0,
