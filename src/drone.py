@@ -17,7 +17,7 @@ class Drone:
         """
         self.mass = mass
         self.inertia = inertia
-        self.com = com
+        self.com = com # Distance between center of mass and the propeller
         self.stVec = np.zeros((1, 6))
         self.t = np.zeros(1)
         self.cmd = np.zeros((1,2)) # [F, theta]
@@ -29,7 +29,8 @@ class Drone:
         self.pos = np.zeros(3) # position
         self.vel = np.zeros(3) # velocity
         self.controlMode = 'static' # static or dynamic
-        self.maxForce = 10000.0 # N
+        self.maxForce = 5.0 # N
+        self.minForce = 0.1 # N
         self.maxAngle = np.pi*45/180 # rad
 
         # Gains for PID controller static position
@@ -90,6 +91,11 @@ class Drone:
             y: y position in m
         """
         self.wpt = np.array([x, y])
+
+    def setLimitControl(self, maxForce, minForce, maxAngle):
+        self.maxForce = maxForce
+        self.minForce = minForce
+        self.maxAngle = maxAngle
 
     def setPos(self, x, y, theta):
         """
@@ -155,14 +161,19 @@ class Drone:
             y: state vector
         """
         if self.controlMode == 'static':
-            self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(- y[5]) + self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
+            fy = self.mass*self.g + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
+            fx = self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
+            self.cmdTmp[1] = np.arctan(fx/fy) + self.kptheta*(self.pos[2] - y[2]) - y[2]
+            self.cmdTmp[0] = (fx**2+fy**2)**.5
+            
+            #self.cmdTmp[1] = self.kptheta*(self.pos[2] - y[2]) + self.kdtheta*(0.0 - y[5]) + self.kpx*(self.pos[0]-y[0]) +  self.kdx*(- y[3])
             # Limit the angle
             self.cmdTmp[1] = np.max([self.cmdTmp[1], -self.maxAngle])
             self.cmdTmp[1] = np.min([self.cmdTmp[1], self.maxAngle])
 
-            self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
+            #self.cmdTmp[0] = self.mass*self.g/np.cos(y[2]+self.cmdTmp[1]) + self.kpy*(self.pos[1] - y[1]) + self.kdy*(-y[4])
             # Limit the force
-            self.cmdTmp[0] = np.max([self.cmdTmp[0], 0])
+            self.cmdTmp[0] = np.max([self.cmdTmp[0], self.minForce])
             self.cmdTmp[0] = np.min([self.cmdTmp[0], self.maxForce])
 
         elif self.controlMode == 'dynamic':
@@ -386,31 +397,32 @@ class Drone:
             self.updateState(r.t, r.y)
         self.plot()
 
-if __name__ == "__main__":
+def main():
     drone = Drone(0.5, 0.1, 0.1)
     drone.setPhysics(9.81)
     drone.eqGenerator()
-    drone.setConditions(0, 0, np.pi*20.0/180.0, 00, -10.0, 0)
+    drone.setConditions(0., 0., 5*np.pi/180., 1.0, -10.0, 0.0)
     drone.setControlMode('static')
-    drone.setPos(1.0, 1.0, 0.0)
-    drone.setVel(10.0, 10.0, 0.0)
+    drone.setLimitControl(1000.0,0.0,45.0*np.pi/180)
+    #drone.setPos(1.0, 1.0, 0.0)
+    #drone.setVel(0.0, 0.0, 0.0)
 
     gainDict = {'Kp_x': 1.0, 
-                'Kd_x': 100.0, 
+                'Kd_x': 10.0, 
                 'Ki_x': 0.0, 
-                'Kp_y': 5.0, 
+                'Kp_y': 1.0, 
                 'Kd_y': 10.0, 
                 'Ki_y': 0.0, 
-                'Kp_theta': 10.0, 
-                'Kd_theta': 20.0, 
+                'Kp_theta': 1.0, 
+                'Kd_theta': 10.0, 
                 'Ki_theta': 0.0,
-                'Kp_xdot': 1.0,
+                'Kp_xdot': 0.0,
                 'Kd_xdot': 0.0,
                 'Ki_xdot': 0.0,
-                'Kp_ydot': 1.0,
+                'Kp_ydot': 0.0,
                 'Kd_ydot': 0.0,
                 'Ki_ydot': 0.0,
-                'Kp_thetadot': 20.0,
+                'Kp_thetadot': 0.0,
                 'Kd_thetadot': 0.0,
                 'Ki_thetadot': 0.0}
     
@@ -420,7 +432,10 @@ if __name__ == "__main__":
     print('Starting simulation')
     drone.solve(0, 100, 0.01)
     #drone.plot2D()
-    drone.animate()
+    #drone.animate()
+    
+if __name__ == "__main__":
+    main()
     
 
     
