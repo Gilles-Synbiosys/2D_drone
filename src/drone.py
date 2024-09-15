@@ -493,19 +493,19 @@ def main():
     drone.setConditions(0., 0., 0*np.pi/180., 0.0, 0.0, 0.0)
     drone.setControlMode('static')
     drone.setActuator('torque')
-    drone.setLimitControl(1000.0,
+    drone.setLimitControl(100.0,
                           0.0,
                           maxAngle=20*np.pi/180,
-                          maxTorque=100.0)
-    drone.setPos(1.0, 1.0, 0.0)
+                          maxTorque=1.0)
+    drone.setPos(5.0, 5.0, 0.0)
     #drone.setVel(0.0, 0.0, 0.0)
 
 
-    gainDict = {'Kp_x': 5.0, 
-                'Kd_x': 100., 
+    gainDict = {'Kp_x': 10.0, 
+                'Kd_x': 20., 
                 'Ki_x': 0.0, 
-                'Kp_y': 100.0, 
-                'Kd_y': 1000.0, 
+                'Kp_y': 10.0, 
+                'Kd_y': 10.0, 
                 'Ki_y': 0.0, 
                 'Kp_theta': 50.0, 
                 'Kd_theta': 10.0, 
