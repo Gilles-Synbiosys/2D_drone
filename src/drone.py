@@ -152,7 +152,6 @@ class Drone:
         self.kdthetadot = gainDict['Kd_thetadot']
         self.kithetadot = gainDict['Ki_thetadot']
     
-
     def control(self, t, y):
         """
         Sets the control inputs for the drone
@@ -250,42 +249,42 @@ class Drone:
         # Separate the plots
         fig.tight_layout(pad=3.0)
 
-        axs[0, 0].plot(self.t, self.stVec[:, 0])
+        axs[0, 0].plot(self.t, self.stVec[:, 0],'r')
         axs[0, 0].set_title('x')
         axs[0, 0].set_ylabel('Position (m)')
         axs[0, 0].set_xlabel('Time (s)')
 
-        axs[0, 1].plot(self.t, self.stVec[:, 1])
-        axs[0, 1].set_title('y (m)')
+        axs[0, 1].plot(self.t, self.stVec[:, 3],'r')
+        axs[0, 1].set_title('xdot (m/s)')
         axs[0, 1].set_xlabel('Time (s)')
-        axs[0, 1].set_ylabel('Position (m)')
+        axs[0, 1].set_ylabel('Velocity (m/s)')
 
-        axs[1, 0].plot(self.t, self.stVec[:, 2]*180/np.pi)
-        axs[1, 0].set_title('theta (deg)')
+        axs[1, 0].plot(self.t, self.stVec[:, 1],'g')
+        axs[1, 0].set_title('y (m)')
         axs[1, 0].set_xlabel('Time (s)')
-        axs[1, 0].set_ylabel('Angle (deg)')
+        axs[1, 0].set_ylabel('Position (m)')
 
-        axs[1, 1].plot(self.t, self.stVec[:, 3])
-        axs[1, 1].set_title('xdot (m/s)')
+        axs[1, 1].plot(self.t, self.stVec[:, 4],'g')
+        axs[1, 1].set_title('ydot (m/s)')
         axs[1, 1].set_xlabel('Time (s)')
         axs[1, 1].set_ylabel('Velocity (m/s)')
 
-        axs[2, 0].plot(self.t, self.stVec[:, 4])
-        axs[2, 0].set_title('ydot (m/s)')
+        axs[2, 0].plot(self.t, self.stVec[:, 2]*180/np.pi,'b')
+        axs[2, 0].set_title('theta (deg)')
         axs[2, 0].set_xlabel('Time (s)')
-        axs[2, 0].set_ylabel('Velocity (m/s)')
+        axs[2, 0].set_ylabel('Angle (deg)')
 
-        axs[2, 1].plot(self.t, self.stVec[:, 5]*180/np.pi)
+        axs[2, 1].plot(self.t, self.stVec[:, 5]*180/np.pi,'b')
         axs[2, 1].set_title('thetadot (deg/s)')
         axs[2, 1].set_xlabel('Time (s)')
         axs[2, 1].set_ylabel('Angular Velocity (deg/s)')
 
-        axs[3, 0].plot(self.t, self.cmd[:, 0])
+        axs[3, 0].plot(self.t, self.cmd[:, 0],'k')
         axs[3, 0].set_title('F (N)')
         axs[3, 0].set_xlabel('Time (s)')
         axs[3, 0].set_ylabel('Force (N)')
 
-        axs[3, 1].plot(self.t, self.cmd[:, 1]*180/np.pi)
+        axs[3, 1].plot(self.t, self.cmd[:, 1]*180/np.pi,'k')
         axs[3, 1].set_title('delta (deg)')  
         axs[3, 1].set_xlabel('Time (s)')
         axs[3, 1].set_ylabel('Angle (deg)')
@@ -317,7 +316,6 @@ class Drone:
 
         plt.show()
 
-
     def plot2D(self):
         """
         Plots the drone in 2D
@@ -348,8 +346,9 @@ class Drone:
             None
         """
 
-        fig = plt.figure()
-        ax = plt.axes(xlim=(-2.0, 2.0), ylim=(-2.0, 2.0))
+        fig, ax = plt.subplots()#figure()
+        # ax = plt.axes(xlim=(-2.0, 2.0), ylim=(-2.0, 2.0))
+        ax.grid(True)
         ax.set_aspect('equal')
         x_top = self.com*np.sin(self.stVec[:, 2])
         y_top = self.com*np.cos(self.stVec[:, 2])
@@ -360,27 +359,34 @@ class Drone:
 
         # Normalize the force
         norm = (x_force**2+y_force**2)**0.5
-        x_force = 0.1*x_force/norm
-        y_force = 0.1*y_force/norm
+        x_force = x_force/(self.maxForce)
+        y_force = y_force/(self.maxForce)
 
         line, = ax.plot([], [], lw=2, color='red')
-        force, = ax.plot([], [], lw=2, color='blue')
+        force, = ax.plot([], [], lw=1, color='blue')
+        comPt, = ax.plot([], [], lw=2, color='black',marker='o')
 
         def init():
             line.set_data([], [])
             force.set_data([], [])
             return line, force
         def animate(i):
+            
+            ax.set_xlim(self.stVec[i, 0] - .5, self.stVec[i, 0] + .5)
+            ax.set_ylim(self.stVec[i, 1] - .5, self.stVec[i, 1] + .5)
             line.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_bot[i]], 
                           [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_bot[i]])
             force.set_data([self.stVec[i, 0]+x_top[i], self.stVec[i, 0]+x_top[i]+x_force[i]], 
                            [self.stVec[i, 1]+y_top[i], self.stVec[i, 1]+y_top[i]+y_force[i]])
-            force.set_color([0, 0, 1-norm[i]/self.maxForce])
+            comPt.set_data([self.stVec[i, 0]], 
+                           [self.stVec[i, 1]])
+            #force.set_color([0, 0, 1-norm[i]/self.maxForce])
+            
+            
             
             return line, force
-        anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(self.t), interval=20, blit=True)
+        anim = animation.FuncAnimation(fig, animate, init_func=init, frames=len(self.t), interval=1)#, blit=True)
         plt.show()
-
 
     def solve(self, t0, tf, dt):
         """
@@ -401,20 +407,20 @@ def main():
     drone = Drone(0.5, 0.1, 0.1)
     drone.setPhysics(9.81)
     drone.eqGenerator()
-    drone.setConditions(0., 0., 5*np.pi/180., 1.0, -10.0, 0.0)
+    drone.setConditions(0., 0., 0*np.pi/180., 2.0, 0.0, 0.0)
     drone.setControlMode('static')
-    drone.setLimitControl(1000.0,0.0,45.0*np.pi/180)
+    drone.setLimitControl(100.0,0.0,45.0*np.pi/180)
     #drone.setPos(1.0, 1.0, 0.0)
     #drone.setVel(0.0, 0.0, 0.0)
 
-    gainDict = {'Kp_x': 1.0, 
-                'Kd_x': 10.0, 
+    gainDict = {'Kp_x': 10.0, 
+                'Kd_x': 1.0, 
                 'Ki_x': 0.0, 
                 'Kp_y': 1.0, 
                 'Kd_y': 10.0, 
                 'Ki_y': 0.0, 
-                'Kp_theta': 1.0, 
-                'Kd_theta': 10.0, 
+                'Kp_theta': .50, 
+                'Kd_theta': 5.0, 
                 'Ki_theta': 0.0,
                 'Kp_xdot': 0.0,
                 'Kd_xdot': 0.0,
@@ -432,7 +438,7 @@ def main():
     print('Starting simulation')
     drone.solve(0, 100, 0.01)
     #drone.plot2D()
-    #drone.animate()
+    drone.animate()
     
 if __name__ == "__main__":
     main()
